@@ -1,0 +1,181 @@
+/////
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+import xgboost as xgb
+
+print("\n=== TRAINING MULTIPLE MODELS ===")
+
+# Initialize models
+models = {
+    'Random Forest': RandomForestClassifier(
+        n_estimators=100,
+        max_depth=10,
+        min_samples_split=5,
+        min_samples_leaf=2,
+        random_state=42,
+        n_jobs=-1
+    ),
+    'XGBoost': xgb.XGBClassifier(
+        n_estimators=100,
+        max_depth=6,
+        learning_rate=0.1,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        eval_metric='logloss'
+    ),
+    'Logistic Regression': LogisticRegression(
+        random_state=42,
+        max_iter=1000,
+        class_weight='balanced'
+    )
+}
+
+# Train all models
+trained_models = {}
+for name, model in models.items():
+    print(f"\n🔄 Training {name}...")
+    model.fit(X_train_balanced, y_train_balanced)
+    trained_models[name] = model
+    print(f"✅ {name} trained successfully!")
+
+
+
+///4
+
+
+print("\n=== MODEL EVALUATION ===")
+
+def evaluate_model(model, X_test, y_test, model_name):
+    # Make predictions
+    y_pred = model.predict(X_test)
+    y_pred_proba = model.predict_proba(X_test)[:, 1]
+    
+    # Calculate metrics
+    auc_score = roc_auc_score(y_test, y_pred_proba)
+    
+    print(f"\n📊 {model_name} Results:")
+    print(f"AUC Score: {auc_score:.4f}")
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_pred))
+    
+    # Confusion Matrix
+    cm = confusion_matrix(y_test, y_pred)
+    print(f"\nConfusion Matrix:")
+    print(f"True Negatives: {cm[0,0]:,}")
+    print(f"False Positives: {cm[0,1]:,}")
+    print(f"False Negatives: {cm[1,0]:,}")
+    print(f"True Positives: {cm[1,1]:,}")
+    
+    # Calculate key metrics
+    precision = cm[1,1] / (cm[1,1] + cm[0,1])
+    recall = cm[1,1] / (cm[1,1] + cm[1,0])
+    f1_score = 2 * (precision * recall) / (precision + recall)
+    
+    print(f"\nKey Metrics:")
+    print(f"Precision: {precision:.4f} ({precision*100:.2f}%)")
+    print(f"Recall: {recall:.4f} ({recall*100:.2f}%)")
+    print(f"F1-Score: {f1_score:.4f}")
+    
+    return {
+        'auc': auc_score,
+        'precision': precision,
+        'recall': recall,
+        'f1_score': f1_score,
+        'cm': cm
+    }
+
+# Evaluate all models
+results = {}
+for name, model in trained_models.items():
+    results[name] = evaluate_model(model, X_test_scaled, y_test, name)
+
+
+
+
+
+
+
+////5
+
+
+print("\n=== COMPARISON WITH CURRENT SYSTEM ===")
+
+# Current system performance (from your analysis)
+current_system_recall = 0.0019  # 0.19%
+current_system_precision = 0.50  # 50% (assumed)
+
+print(f"📉 CURRENT SYSTEM (Terrible):")
+print(f"Recall: {current_system_recall:.4f} ({current_system_recall*100:.2f}%)")
+print(f"Precision: {current_system_precision:.4f} ({current_system_precision*100:.2f}%)")
+print(f"F1-Score: {2 * (current_system_precision * current_system_recall) / (current_system_precision + current_system_recall):.4f}")
+
+print(f"\n📈 YOUR NEW MODELS:")
+for name, result in results.items():
+    improvement_recall = result['recall'] / current_system_recall
+    improvement_f1 = result['f1_score'] / (2 * (current_system_precision * current_system_recall) / (current_system_precision + current_system_recall))
+    
+    print(f"\n🚀 {name}:")
+    print(f"Recall: {result['recall']:.4f} ({result['recall']*100:.2f}%) - {improvement_recall:.0f}x better!")
+    print(f"Precision: {result['precision']:.4f} ({result['precision']*100:.2f}%)")
+    print(f"F1-Score: {result['f1_score']:.4f} - {improvement_f1:.0f}x better!")
+    print(f"AUC: {result['auc']:.4f}")
+
+
+///6
+
+print("\n=== FEATURE IMPORTANCE ANALYSIS ===")
+
+# Get feature importance from Random Forest
+rf_model = trained_models['Random Forest']
+feature_importance = pd.DataFrame({
+    'feature': feature_columns,
+    'importance': rf_model.feature_importances_
+}).sort_values('importance', ascending=False)
+
+print("\n🔍 Top 10 Most Important Features:")
+print(feature_importance.head(10))
+
+# Plot feature importance
+import matplotlib.pyplot as plt
+plt.figure(figsize=(10, 6))
+top_features = feature_importance.head(15)
+plt.barh(range(len(top_features)), top_features['importance'])
+plt.yticks(range(len(top_features)), top_features['feature'])
+plt.xlabel('Feature Importance')
+plt.title('Top 15 Most Important Features for Fraud Detection')
+plt.gca().invert_yaxis()
+plt.tight_layout()
+plt.show()
+
+
+
+
+//////7
+
+
+
+print("\n=== SELECTING BEST MODEL ===")
+
+# Find best model based on F1-score (balance of precision and recall)
+best_model_name = max(results.keys(), key=lambda k: results[k]['f1_score'])
+best_model = trained_models[best_model_name]
+best_results = results[best_model_name]
+
+print(f"\n🏆 BEST MODEL: {best_model_name}")
+print(f"✅ F1-Score: {best_results['f1_score']:.4f}")
+print(f"✅ Recall: {best_results['recall']:.4f} ({best_results['recall']*100:.2f}%)")
+print(f"✅ Precision: {best_results['precision']:.4f} ({best_results['precision']*100:.2f}%)")
+print(f"✅ AUC: {best_results['auc']:.4f}")
+
+# Calculate business impact
+fraud_caught = best_results['cm'][1,1]
+fraud_missed = best_results['cm'][1,0]
+total_fraud = fraud_caught + fraud_missed
+
+print(f"\n💰 BUSINESS IMPACT:")
+print(f"Fraud cases caught: {fraud_caught:,} out of {total_fraud:,}")
+print(f"Fraud cases missed: {fraud_missed:,}")
+print(f"Success rate: {(fraud_caught/total_fraud)*100:.1f}%")

@@ -1,0 +1,1 @@
+        print(f"🍽️ Philosopher {id} is done eating and thinking again.")
